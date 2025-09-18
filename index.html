@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bài 1 — Dao động điều hòa (Phiên bản master)</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#02030a; --cyan:#00fff2; --magenta:#ff5bff; --lime:#7ef59b; --yellow:#fff55a;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,#000 0%, var(--bg) 60%);font-family:Rajdhani,system-ui,Arial,sans-serif;color:#e6f7ff}
+.wrap{max-width:1180px;margin:18px auto;padding:18px}
+header{display:flex;flex-direction:column;align-items:center;gap:6px}
+h1{font-family:Orbitron, sans-serif;font-size:2rem;margin:0;
+    background:linear-gradient(270deg,var(--cyan),var(--magenta),var(--yellow),var(--lime),var(--cyan));
+    background-size:900% 900%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    animation:gradShift 10s linear infinite;}
+@keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.subtitle{color:rgba(255,255,255,0.18);margin:0;font-size:0.95rem}
+
+.container{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:16px}
+@media (max-width:1000px){.container{grid-template-columns:1fr;padding:12px}}
+
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 40px rgba(0,0,0,0.6)}
+.panel-right{position:sticky;top:18px;height:fit-content}
+
+h2{font-family:Orbitron;color:var(--magenta);margin:6px 0;font-size:1.02rem;text-shadow:0 0 10px rgba(255,91,255,0.2)}
+h3{color:var(--lime);margin:6px 0}
+p,li{color:#dff9ff;line-height:1.5}
+ul{margin-left:18px}
+
+/* Graph area */
+.graph-card{padding:12px;border-radius:10px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02)}
+.canvas-wrap{position:relative}
+.canvas { width:100%; height:360px; border-radius:8px; background:#070812; display:block; box-shadow:0 6px 30px rgba(0,255,255,0.04); cursor:crosshair; }
+
+/* Controls */
+.controls{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.control-row{display:flex;gap:10px;align-items:center}
+label{min-width:110px;color:#bfeffd}
+input[type=range]{flex:1;accent-color:var(--cyan)}
+.val{min-width:180px;text-align:right;color:var(--cyan);font-weight:700}
+.btn{background:linear-gradient(90deg,var(--cyan),var(--magenta));border:none;color:#041428;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer}
+
+/* Info box */
+.info{margin-top:12px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02)}
+.info .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.02)}
+.info .row:last-child{border-bottom:none}
+.explain{font-size:0.92rem;color:var(--yellow);margin-top:8px;padding:8px;border-radius:8px;background:rgba(255,255,0,0.03)}
+
+/* Tooltip */
+.tooltip{position:fixed;display:none;pointer-events:none;background:rgba(2,6,10,0.96);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px;color:#bfeffd;font-size:0.95rem;transform:translate(-50%,-120%);box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+.small{font-size:0.92rem;color:#bfeffd}
+.muted{color:rgba(255,255,255,0.18);font-size:0.9rem}
+.footer-note{margin-top:14px;color:var(--muted);font-size:0.92rem}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Dao động điều hòa — Bài 1 (Phiên bản hoàn nhất)</h1>
+      <p class="subtitle">Lý thuyết, bản chất ký hiệu, đồ thị tương tác: ±A, tick T/4.., tooltip t/x/v/a, ω & φ hiển thị rad/deg, chú thích động.</p>
+    </header>
+
+    <div class="container">
+      <!-- MAIN -->
+      <main class="card">
+        <section class="graph-card">
+          <h2>Đồ thị tương tác: <span class="small">x(t) = A · cos(ω t + φ)</span></h2>
+
+          <div class="canvas-wrap">
+            <!-- Use a canvas element sized via CSS class .canvas -->
+            <canvas id="graphCanvas" class="canvas" aria-label="Đồ thị dao động điều hòa"></canvas>
+          </div>
+
+          <div class="controls" aria-hidden="false" aria-live="polite">
+            <div class="control-row">
+              <label for="A">Biên độ A</label>
+              <input id="A" type="range" min="0.5" max="12" step="0.1" value="4" />
+              <div class="val" id="valA">A = 4.00</div>
+            </div>
+
+            <div class="control-row">
+              <label for="omega">Tần số góc ω</label>
+              <input id="omega" type="range" min="0.5" max="12" step="0.05" value="4" />
+              <div class="val" id="valOmega">ω = 4.00 rad/s</div>
+            </div>
+
+            <div class="control-row">
+              <label for="phi">Pha ban đầu φ (°)</label>
+              <input id="phi" type="range" min="-180" max="180" step="1" value="0" />
+              <div class="val" id="valPhi">φ = 0° (0.00 rad)</div>
+            </div>
+
+            <div style="display:flex;gap:10px;align-items:center">
+              <button id="resetBtn" class="btn">Reset</button>
+              <div class="muted">Kéo slider để quan sát: ±A thay đổi; ω nén/giãn; φ dịch pha.</div>
+            </div>
+          </div>
+
+          <div class="info" role="status" aria-live="polite">
+            <div class="row"><div class="small">A</div><div id="infoA">4.00</div></div>
+            <div class="row"><div class="small">ω (rad/s · °/s)</div><div id="infoOmega">4.00 · 229.18°/s</div></div>
+            <div class="row"><div class="small">T (chu kì)</div><div id="infoT">1.5708 s</div></div>
+            <div class="row"><div class="small">f (Hz)</div><div id="infof">0.6366 Hz</div></div>
+            <div class="row"><div class="small">φ</div><div id="infoPhi">0.00 rad · 0°</div></div>
+            <div class="explain" id="dynNote">Chú thích: kéo slider để quan sát thay đổi trực quan.</div>
+          </div>
+        </section>
+
+        <section style="margin-top:14px">
+          <h2>Lý thuyết và bản chất ký hiệu</h2>
+          <p class="small"><strong>Phương trình:</strong> x(t) = A cos(ω t + φ)</p>
+          <ul>
+            <li><b>A</b> — biên độ (±A): độ lệch cực đại so với vị trí cân bằng.</li>
+            <li><b>ω</b> — tần số góc (rad/s): ω = 2π f = 2π / T. Tăng ω → T giảm → đồ thị nén theo trục thời gian.</li>
+            <li><b>T</b> — chu kì: T = 2π/ω (s).</li>
+            <li><b>f</b> — tần số: f = 1/T (Hz).</li>
+            <li><b>φ</b> — pha ban đầu (rad hoặc độ): xác định trạng thái ban đầu tại t=0, dịch pha đồ thị.</li>
+            <li>Đường tròn lượng giác: dao động điều hòa là hình chiếu của chuyển động tròn đều (pha θ = ωt + φ).</li>
+          </ul>
+
+          <h3>Công thức quan trọng</h3>
+          <ul>
+            <li>v(t) = -A ω sin(ω t + φ)</li>
+            <li>a(t) = -ω² x(t)</li>
+            <li>Quãng đường trong 1 chu kì: s = 4A; nửa chu kì: s = 2A</li>
+            <li>Δφ = ω Δt — quy đổi thời gian lệch thành độ lệch pha</li>
+          </ul>
+        </section>
+
+      </main>
+
+      <!-- RIGHT PANEL -->
+      <aside class="card panel-right">
+        <h2>Tóm tắt nhanh & Hướng dẫn</h2>
+        <p class="small">- ±A hiển thị rõ trên trục Oy. <br>- Ox có tick ghi T/4, T/2, T, 3T/2, 2T (tùy số chu kì hiển thị).<br>- Tooltip: hover gần tick → nhãn mốc; hover bất kỳ → t, x, v, a.</p>
+
+        <h3>Hướng dẫn thực hành</h3>
+        <ol class="small">
+          <li>Kéo <b>A</b> để thấy đỉnh/đáy thay đổi (±A).</li>
+          <li>Kéo <b>ω</b> để thấy chu kì T = 2π/ω thay đổi (đồ thị nén/giãn).</li>
+          <li>Kéo <b>φ</b> (deg) để dịch pha — chú ý rad/deg được hiển thị.</li>
+        </ol>
+
+        <div style="margin-top:12px">
+          <button id="toggleRunner" class="btn">Bật/ Tắt vật chạy</button>
+          <p class="small" style="margin-top:8px">Tùy chọn: bật vật chạy để thấy mối quan hệ pha giữa x, v, a.</p>
+        </div>
+      </aside>
+    </div>
+
+    <div id="tooltip" class="tooltip" aria-hidden="true"></div>
+    <p class="footer-note">File này tổng hợp đầy đủ: kiến thức cơ bản → bản chất → vận dụng (đồ thị & công thức). Nếu cần, mình có thể thêm Bài 2 (lệch pha so sánh) và Bài 3 (v(t), a(t) đồ thị riêng).</p>
+  </div>
+
+<script>
+/* ----------------- Utilities ----------------- */
+const canvas = document.getElementById('graphCanvas');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+
+const A_slider = document.getElementById('A');
+const omega_slider = document.getElementById('omega');
+const phi_slider = document.getElementById('phi');
+const resetBtn = document.getElementById('resetBtn');
+const toggleRunner = document.getElementById('toggleRunner'); // optional
+
+const valA = document.getElementById('valA');
+const valOmega = document.getElementById('valOmega');
+const valPhi = document.getElementById('valPhi');
+
+const infoA = document.getElementById('infoA');
+const infoOmega = document.getElementById('infoOmega');
+const infoT = document.getElementById('infoT');
+const infof = document.getElementById('infof');
+const infoPhi = document.getElementById('infoPhi');
+const dynNote = document.getElementById('dynNote');
+
+const tooltip = document.getElementById('tooltip');
+
+const defaults = {A:4, omega:4, phiDeg:0};
+let runnerOn = false;
+let runnerTime = 0;
+
+/* conversions */
+function degToRad(deg){ return deg * Math.PI / 180; }
+function radToDeg(rad){ return rad * 180 / Math.PI; }
+
+/* resize canvas for sharp rendering */
+function resizeCanvas(){
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0); // scale drawing operations
+}
+
+/* main render function */
+function render(){
+  resizeCanvas();
+
+  // params
+  const A = parseFloat(A_slider.value);
+  const omega = parseFloat(omega_slider.value);
+  const phiDeg = parseFloat(phi_slider.value);
+  const phi = degToRad(phiDeg);
+
+  // derived
+  const T = 2 * Math.PI / omega;
+  const f = 1 / T;
+
+  // layout
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  const marginLeft = 80;
+  const marginRight = 20;
+  const usableWidth = cssW - marginLeft - marginRight;
+  const midY = cssH / 2;
+
+  // choose cycles to display so waveform looks good (respect min px per second)
+  const minPxPerSec = 28;
+  let cycles = 4;
+  let displayTime = cycles * T;
+  let scaleX = usableWidth / displayTime;
+  if(scaleX < minPxPerSec){
+    cycles = Math.max(1, Math.floor(usableWidth / (minPxPerSec * T)));
+    displayTime = cycles * T;
+    scaleX = usableWidth / displayTime;
+  }
+  if(cycles < 1) { cycles = 1; displayTime = cycles * T; scaleX = usableWidth / displayTime; }
+
+  // vertical scale: map ±MAX_A units to some px. Use MAX_A = 12 as full scale
+  const MAX_A = 12; // same range as slider max
+  const pxPerUnit = (midY - 36) / MAX_A; // px per unit of A
+
+  // drawing background
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#07121a";
+  ctx.fillRect(0,0,cssW,cssH);
+
+  // axes
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(marginLeft, midY); ctx.lineTo(marginLeft + usableWidth, midY); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(marginLeft, 8); ctx.lineTo(marginLeft, cssH-8); ctx.stroke();
+
+  // ±A grid lines
+  const ampY = midY - A * pxPerUnit;
+  const negAmpY = midY + A * pxPerUnit;
+  ctx.strokeStyle = "rgba(0,255,255,0.10)";
+  ctx.setLineDash([6,6]);
+  ctx.beginPath();
+  ctx.moveTo(marginLeft, ampY); ctx.lineTo(marginLeft + usableWidth, ampY);
+  ctx.moveTo(marginLeft, negAmpY); ctx.lineTo(marginLeft + usableWidth, negAmpY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ±A labels on Y axis
+  ctx.fillStyle = "#00fff2"; ctx.font = "13px Rajdhani, Arial"; ctx.textAlign = "right";
+  ctx.fillText(`+A = ${A.toFixed(2)}`, marginLeft - 12, ampY + 5);
+  ctx.fillText(`-A = ${(-A).toFixed(2)}`, marginLeft - 12, negAmpY + 5);
+
+  // ticks on Ox: show k*T/4 labels up to cycles*4
+  ctx.fillStyle = "#ffeb7a"; ctx.strokeStyle = "#ffeb7a"; ctx.textAlign = "center"; ctx.font = "12px Rajdhani, Arial";
+  const maxK = cycles * 4;
+  for(let k=0;k<=maxK;k++){
+    const t = k * (T/4);
+    const xPx = marginLeft + t * scaleX;
+    ctx.beginPath(); ctx.moveTo(xPx, midY - 6); ctx.lineTo(xPx, midY + 6); ctx.stroke();
+    let label;
+    if(k===0) label = "0";
+    else if(k % 4 === 0) label = (k/4 === 1) ? "T" : `${k/4}T`;
+    else label = `${k}T/4`;
+    ctx.fillText(label, xPx, midY + 22);
+  }
+
+  // waveform x(t)
+  ctx.lineWidth = 2.4; ctx.strokeStyle = "#00fff2";
+  ctx.beginPath();
+  const stepPx = 1;
+  for(let px = 0; px <= usableWidth; px += stepPx){
+    const t = px / scaleX;
+    const xVal = A * Math.cos(omega * t + phi);
+    const y = midY - xVal * pxPerUnit;
+    const drawX = marginLeft + px;
+    if(px === 0) ctx.moveTo(drawX, y); else ctx.lineTo(drawX, y);
+  }
+  ctx.stroke();
+
+  // special markers at ticks
+  ctx.fillStyle = "#ff5bff";
+  for(let k=0;k<=maxK;k++){
+    const t = k * (T/4);
+    const xPx = marginLeft + t * scaleX;
+    if(xPx < marginLeft - 8 || xPx > marginLeft + usableWidth + 8) continue;
+    const xVal = A * Math.cos(omega * t + phi);
+    const y = midY - xVal * pxPerUnit;
+    ctx.beginPath(); ctx.arc(xPx, y, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // optional runner point if toggled on
+  if(runnerOn){
+    runnerTime += 0.02; // speed (s per frame) — adjust to taste
+    const tRunner = runnerTime % (displayTime);
+    const xValR = A * Math.cos(omega * tRunner + phi);
+    const xPxR = marginLeft + tRunner * scaleX;
+    const yR = midY - xValR * pxPerUnit;
+    ctx.fillStyle = "#ffff66";
+    ctx.beginPath(); ctx.arc(xPxR, yR, 6, 0, Math.PI*2); ctx.fill();
+  }
+
+  // update text panels
+  valA.textContent = `A = ${A.toFixed(2)}`;
+  valOmega.textContent = `ω = ${omega.toFixed(2)} rad/s (${radToDeg(omega).toFixed(1)}°/s)`;
+  valPhi.textContent = `φ = ${phiDeg.toFixed(0)}° (${(phi).toFixed(3)} rad)`;
+
+  infoA.textContent = A.toFixed(2);
+  infoOmega.textContent = `${omega.toFixed(2)} · ${radToDeg(omega).toFixed(2)}°/s`;
+  infoT.textContent = `T = ${T.toFixed(4)} s`;
+  infof.textContent = `${f.toFixed(4)} Hz`;
+  infoPhi.textContent = `${phi.toFixed(4)} rad · ${phiDeg.toFixed(1)}°`;
+}
+
+/* ---------- tooltip logic ---------- */
+function getRenderParams(){
+  const A = parseFloat(A_slider.value);
+  const omega = parseFloat(omega_slider.value);
+  const phiDeg = parseFloat(phi_slider.value);
+  const phi = degToRad(phiDeg);
+  const T = 2 * Math.PI / omega;
+  const cssW = canvas.clientWidth;
+  const marginLeft = 80, marginRight = 20;
+  const usableWidth = cssW - marginLeft - marginRight;
+  let cycles = 4;
+  let displayTime = cycles * T;
+  let scaleX = usableWidth / displayTime;
+  const minPxPerSec = 28;
+  if(scaleX < minPxPerSec){
+    cycles = Math.max(1, Math.floor(usableWidth / (minPxPerSec * T)));
+    displayTime = cycles * T;
+    scaleX = usableWidth / displayTime;
+  }
+  if(cycles < 1) { cycles = 1; displayTime = cycles * T; scaleX = usableWidth / displayTime; }
+  return {A,omega,phiDeg,phi,T,scaleX,displayTime,cycles,usableWidth,marginLeft};
+}
+function handleMouseMove(e){
+  const params = getRenderParams();
+  const rect = canvas.getBoundingClientRect();
+  const xCSS = e.clientX - rect.left;
+  // compute t at pointer
+  const t = (xCSS - params.marginLeft) / params.scaleX;
+  // tolerance in px to consider near tick
+  const tolPx = 8;
+  const cycles = params.cycles;
+  const T = params.T;
+  let nearLabel = null;
+  for(let k=0;k<=cycles*4;k++){
+    const tickT = k*(T/4);
+    const tickX = params.marginLeft + tickT * params.scaleX;
+    if(Math.abs(tickX - xCSS) <= tolPx){
+      if(k===0) nearLabel = "t = 0";
+      else if(k % 4 === 0) nearLabel = `t = ${k/4}T`;
+      else nearLabel = `t = ${k}T/4`;
+      break;
+    }
+  }
+  if(nearLabel){
+    showTooltip(e.clientX, e.clientY, nearLabel);
+  } else {
+    // compute x,v,a at t
+    const A = params.A, omega = params.omega, phi = params.phi;
+    const xVal = A * Math.cos(omega * t + phi);
+    const vVal = -A * omega * Math.sin(omega * t + phi);
+    const aVal = -omega * omega * xVal;
+    const html = `t = ${t.toFixed(4)} s<br>x = ${xVal.toFixed(4)} (units)<br>v = ${vVal.toFixed(4)} (units/s)<br>a = ${aVal.toFixed(4)} (units/s²)`;
+    showTooltip(e.clientX, e.clientY, html);
+  }
+}
+function showTooltip(px, py, html){
+  tooltip.style.left = px + 'px';
+  tooltip.style.top = py - 14 + 'px';
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.setAttribute('aria-hidden','false');
+}
+function hideTooltip(){ tooltip.style.display = 'none'; tooltip.setAttribute('aria-hidden','true'); }
+
+/* ---------- transient note ---------- */
+let noteTimer = null;
+function showNote(msg){
+  dynNote.textContent = msg;
+  if(noteTimer) clearTimeout(noteTimer);
+  noteTimer = setTimeout(()=>{ dynNote.textContent = "Chú thích: kéo slider để quan sát ±A, nén/giãn theo ω, dịch pha theo φ."; }, 3500);
+}
+
+/* ---------- events ---------- */
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseleave', hideTooltip);
+
+A_slider.addEventListener('input', ()=>{
+  render();
+  showNote("A thay đổi → ±A trên trục Oy thay đổi (đỉnh/đáy).");
+});
+omega_slider.addEventListener('input', ()=>{
+  render();
+  showNote("ω thay đổi → T = 2π/ω thay đổi; đồ thị nén/giãn theo trục thời gian.");
+});
+phi_slider.addEventListener('input', ()=>{
+  render();
+  showNote("φ thay đổi → đồ thị dịch pha (xác nhận cả rad/deg).");
+});
+
+resetBtn.addEventListener('click', ()=>{
+  A_slider.value = defaults.A;
+  omega_slider.value = defaults.omega;
+  phi_slider.value = defaults.phiDeg;
+  render();
+  showNote("Đã reset về mặc định.");
+});
+
+/* toggle runner */
+toggleRunner && toggleRunner.addEventListener('click', ()=>{
+  runnerOn = !runnerOn;
+  toggleRunner.textContent = runnerOn ? "Tắt vật chạy" : "Bật vật chạy";
+});
+
+/* animation loop for runner */
+function animate(){
+  if(runnerOn) {
+    render();
+  }
+  requestAnimationFrame(animate);
+}
+
+/* initial */
+window.addEventListener('resize', ()=>{ render(); });
+render();
+animate();
+</script>
+</body>
+</html>
